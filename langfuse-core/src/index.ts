@@ -176,6 +176,7 @@ abstract class LangfuseCoreStateless {
   additionalHeaders: Record<string, string> = {};
   private flushAt: number;
   private flushInterval: number;
+  private flushManually: boolean;
   private requestTimeout: number;
   private removeDebugCallback?: () => void;
   private debugMode: boolean = false;
@@ -213,6 +214,7 @@ abstract class LangfuseCoreStateless {
     this.additionalHeaders = options?.additionalHeaders || {};
     this.flushAt = options?.flushAt ? Math.max(options?.flushAt, 1) : 15;
     this.flushInterval = options?.flushInterval ?? 10000;
+    this.flushManually = options?.flushManually ?? false;
     this.release = options?.release ?? getEnv("LANGFUSE_RELEASE") ?? getCommonReleaseEnvs() ?? undefined;
     this.mask = options?.mask;
 
@@ -642,6 +644,10 @@ abstract class LangfuseCoreStateless {
 
     this._events.emit(type, finalEventBody);
 
+    if (this.flushManually) {
+      return;
+    }
+
     // Flush queued events if we meet the flushAt length
     if (queue.length >= this.flushAt) {
       this.flush();
@@ -919,7 +925,7 @@ abstract class LangfuseCoreStateless {
    *
    * @returns {Promise<void>} A promise that resolves when the flushing is completed.
    */
-  async flushAsync(): Promise<void> {
+  async _flushAsync(): Promise<void> {
     await Promise.all(Object.values(this.pendingEventProcessingPromises)).catch((e) => {
       logIngestionError(e);
     });
@@ -937,6 +943,15 @@ abstract class LangfuseCoreStateless {
         // safeguard against unexpected synchronous errors
       } catch (e) {
         console.error("[Langfuse SDK] Error while flushing Langfuse", e);
+      }
+    });
+  }
+
+  async flushAsync(): Promise<void> {
+    return this._flushAsync().then(() => {
+      const queue = this.getPersistedProperty<LangfuseQueueItem[]>(LangfusePersistedProperty.Queue) || [];
+      if (queue.length) {
+        return this.flushAsync();
       }
     });
   }

@@ -15,6 +15,8 @@ export type LangfuseCoreOptions = {
   flushAt?: number;
   // The interval in milliseconds between periodic flushes
   flushInterval?: number;
+  // Whether to flush manually. Defaults to false.
+  flushManually?: boolean;
   // How many times we will retry HTTP requests
   fetchRetryCount?: number;
   // The delay between HTTP request retries
